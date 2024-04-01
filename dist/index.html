@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" href="../src/index.css" />
+    <title>Document</title>
+  </head>
+  <body>
+    <form id="loginForm">
+      <div>
+        <label for="username">Логин:</label>
+        <input id="username" type="text" name="username" required />
+      </div>
+      <div>
+        <label for="password">Пароль:</label>
+        <input id="password" type="text" name="password" required />
+      </div>
+      <div>
+        <label for="server">Сервер:</label>
+        <input id="server" type="text" name="server" required />
+      </div>
+      <button type="submit">Авторизоваться</button>
+    </form>
+    <main>
+      <div id="callStatus">Статус: в ожиданий звонка</div>
+      <div id="callingTo"></div>
+      <div id="timer"></div>
+      <div>
+        <label for="phoneNumberInput">Номер телефона</label>
+        <input id="phoneNumberInput" type="text" required />
+      </div>
+      <button id="callButton">Позвонить</button>
+      <ul id="callHistory"></ul>
+      <audio
+        id="outgoingRingtone"
+        src="../sounds/cell-phone-ring-simple_my3rhfvo.mp3"
+        preload="auto"
+        loop
+      ></audio>
+      <audio
+        id="incomingRingtone"
+        src="../sounds/02450.mp3"
+        preload="auto"
+        loop
+      ></audio>
+      <audio id="remoteAudio" autoplay></audio>
+    </main>
+    <script src="main.js"></script>
+  </body>
+</html>

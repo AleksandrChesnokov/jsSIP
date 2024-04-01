@@ -1,0 +1,16 @@
+{
+  "name": "Софтфон jsSIP",
+  "description": "С помощью этого расширения вы можете совершать входящие и исходящие звонки.",
+  "version": "1.0",
+  "manifest_version": 3,
+  "action": {
+    "default_popup": "./dist/index.html",
+    "default_icon": {
+      "16": "./images/icon-16.png",
+      "32": "./images/icon-32.png",
+      "48": "./images/icon-48.png",
+      "128": "./images/icon-128.png"
+    }
+  },
+  "permissions": ["storage"]
+}
