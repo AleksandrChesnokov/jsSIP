@@ -1,5 +1,6 @@
 import JsSIP from "jssip";
 
+window.addEventListener("DOMContentLoaded", loadUserDataAndAuthorize);
 document.querySelector("main").style.display = "none";
 
 let callStartTime; // Время начала звонка
@@ -11,10 +12,35 @@ const options = {
   mediaConstraints: { audio: true, video: false },
 };
 
+async function saveUserData(username, server, password) {
+  const userData = {
+    username: username,
+    server: server,
+    password: password,
+  };
+  await chrome.storage.session.set({ userData: userData });
+}
+
+// Функция для загрузки данных пользователя из хранилища и автоматической авторизации
+async function loadUserDataAndAuthorize() {
+  await chrome.storage.session.get("userData", function (data) {
+    const userData = data.userData;
+    if (userData) {
+      document.getElementById("loginForm").style.display = "none";
+      document.querySelector("main").style.display = "";
+      loadCallHistory(userData.username);
+      document.getElementById("username").value = userData.username;
+      document.getElementById("server").value = userData.server;
+      document.getElementById("password").value = userData.password;
+      document.getElementById("loginForm").dispatchEvent(new Event("submit"));
+    }
+  });
+}
+
 // Функция для сохранения истории звонков в storage
 async function saveCallHistory(username, number) {
   try {
-    let data = await chrome.storage.session.get(username);
+    let data = await chrome.storage.local.get(username);
     let userCallHistory = data[username] || [];
     userCallHistory.unshift(number);
     if (userCallHistory.length > 10) {
@@ -22,7 +48,7 @@ async function saveCallHistory(username, number) {
     }
     let newData = {};
     newData[username] = userCallHistory;
-    await chrome.storage.session.set(newData);
+    await chrome.storage.local.set(newData);
     loadCallHistory(username);
   } catch (error) {
     console.error("Ошибка сохранения историй:", error);
@@ -32,7 +58,7 @@ async function saveCallHistory(username, number) {
 // Функция для загрузки истории звонков из storage и отображения на странице
 async function loadCallHistory(username) {
   try {
-    let data = await chrome.storage.session.get(username);
+    let data = await chrome.storage.local.get(username);
     let userCallHistory = data[username] || [];
     let historyList = document.getElementById("callHistory");
     historyList.innerHTML = "";
@@ -94,7 +120,26 @@ document.getElementById("loginForm").addEventListener("submit", (e) => {
   function makeCall() {
     let phoneNumberInput = document.getElementById("phoneNumberInput").value;
     let session = ua.call(`sip:${phoneNumberInput}@voip.uiscom.ru`, options);
-    attachRemoteStream(session);
+    let audioStream;
+    session.connection.ontrack = (event) => {
+      if (event.track.kind === "audio") {
+        if (event.streams.length > 0) {
+          audioStream = event.streams[0];
+        } else {
+          const stream = new MediaStream([event.track]);
+          audioStream = stream;
+        }
+      }
+    };
+    session.on("accepted", function () {
+      remoteAudio.srcObject = audioStream;
+    });
+    session.on("ended", function () {
+      remoteAudio.srcObject = null;
+    });
+    session.on("failed", function () {
+      remoteAudio.srcObject = null;
+    });
   }
 
   ua.on("disconnected", function (e) {
@@ -106,6 +151,7 @@ document.getElementById("loginForm").addEventListener("submit", (e) => {
   ua.on("registered", function (e) {
     document.getElementById("loginForm").style.display = "none";
     document.querySelector("main").style.display = "";
+    saveUserData(username, server, password);
     loadCallHistory(username);
   });
 
@@ -140,6 +186,9 @@ document.getElementById("loginForm").addEventListener("submit", (e) => {
       clearInterval(callDurationInterval);
       document.getElementById("timer").style.display = "none";
       document.getElementById("callingTo").style.display = "none";
+      callButton.style.display = "";
+      document.getElementById("acceptButton")?.remove();
+      document.getElementById("rejectButton")?.remove();
       callButton.textContent = "Позвонить";
       callButton.removeEventListener("click", resetCall);
       callButton.addEventListener("click", makeCall);
@@ -163,6 +212,7 @@ document.getElementById("loginForm").addEventListener("submit", (e) => {
 
     session.on("accepted", (e) => {
       callStartTime = session.start_time;
+      callButton.style.display = "";
       updateUICallStatus("Статус: разговор");
       updateUIForCallInProgress();
       document.getElementById("outgoingRingtone").pause();
@@ -189,24 +239,45 @@ document.getElementById("loginForm").addEventListener("submit", (e) => {
         updateUICallStatus("Статус: в ожидании звонка");
       }, 1000);
     });
-    // Входящий звонок
+
     if (session.direction === "incoming") {
       let uri = request.from.uri.user;
-      saveCallHistory(username, uri);
       document.getElementById("incomingRingtone").play();
+      saveCallHistory(username, uri);
       updateUICallStatus(`Статус: входящий звонок`);
+      callButton.style.display = "none";
       document.getElementById("callingTo").style.display = "";
       document.getElementById("callingTo").innerText = `Звонит: ${uri}`;
-      setTimeout(() => {
-        const confirmed = confirm("Входящий вызов. Принять звонок?");
-        if (confirmed) {
-          session.answer();
-          document.getElementById("incomingRingtone").pause();
-        } else {
-          session.terminate();
-          document.getElementById("incomingRingtone").pause();
-        }
-      }, 0);
+
+      const acceptButton = document.createElement("button");
+      acceptButton.textContent = "Принять";
+      acceptButton.setAttribute("id", "acceptButton");
+
+      const rejectButton = document.createElement("button");
+      rejectButton.textContent = "Отклонить";
+      rejectButton.setAttribute("id", "rejectButton");
+
+      const phoneNumberInputDiv = document.querySelector(
+        "div > label[for='phoneNumberInput']"
+      ).parentElement;
+      const callHistory = document.getElementById("callHistory");
+
+      phoneNumberInputDiv.parentNode.insertBefore(acceptButton, callHistory);
+      phoneNumberInputDiv.parentNode.insertBefore(rejectButton, callHistory);
+
+      acceptButton.addEventListener("click", () => {
+        session.answer();
+        document.getElementById("incomingRingtone").pause();
+        acceptButton.remove();
+        rejectButton.remove();
+      });
+
+      rejectButton.addEventListener("click", () => {
+        session.terminate();
+        document.getElementById("incomingRingtone").pause();
+        acceptButton.remove();
+        rejectButton.remove();
+      });
     }
   });
   ua.on("connected", function (e) {
